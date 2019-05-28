@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -30,7 +30,7 @@ func SSHConnect(user, password, host string, port int) (*ssh.Session, error) {
 		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 			return nil
 		},
-		Timeout: 30 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 
 	// connet to ssh
@@ -48,23 +48,65 @@ func SSHConnect(user, password, host string, port int) (*ssh.Session, error) {
 	return session, nil
 }
 
+type remoteS struct {
+	ip       string
+	port     int
+	password string
+	// info     struct {
+	// 	id     int
+	// 	ppp    string
+	// 	status bool
+	// }
+}
+
 func main() {
 	/* 初始化变量 */
-	remoteS := make(map[string]string)
-	remoteS["ip"] = "182.16.117.186"
-	remoteS["port"] = "39393"
-	remoteS["password"] = "BXT#8dkskdv2%%$vgAjdinsA1R%3#rFdeg"
+	remoteDic := remoteS{}
+	remoteDic.ip = "182.16.117.186"
+	remoteDic.port = 39393
+	remoteDic.password = "BXT#8dkskdv2%%vgAjdinsA1R%3#rFdeg"
+	// remoteDic.info.id = 1
+	// remoteDic.info.ppp = "asdf"
+	// var port int = 39393
+	var cmdlist = [...]string{"ps -ef |grep 5000", "ifconfig", "exit"}
 
 	// fmt.Println("远程ip地址: ", remoteS["ip"])
 	// fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
-	session, err := SSHConnect("root", remoteS["password"], remoteS["ip"], 39393)
+	session, err := SSHConnect("root", remoteDic.password, remoteDic.ip, remoteDic.port)
 	if err != nil {
+		// fmt.Println("test0!")
+		// log.Println("test!")
 		log.Fatal(err)
 	}
 	defer session.Close()
 
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
-	session.Run("ps -ef |grep 5000")
-	session.Run("ifconfig")
+	// 定义命令的输入管道
+	stdinBuf, err := session.StdinPipe()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	// 获取 Shell 上的输出
+	var outbt, errbt bytes.Buffer
+	session.Stdout = &outbt
+	session.Stderr = &errbt
+	err = session.Shell()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	for _, c := range cmdlist {
+		c = c + "\n"
+		stdinBuf.Write([]byte(c))
+	}
+	session.Wait()
+	log.Fatalln((outbt.String() + errbt.String()))
+
+	// log.Fatal("exit.")
+	// session.Stdout = os.Stdout
+	// session.Stderr = os.Stderr
+	// session.Run("ps -ef |grep 5000")
+	// session.Run("ifconfig")
 }
